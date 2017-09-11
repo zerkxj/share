@@ -79,6 +79,9 @@ output ctrl_sync_o;
 //----------------------------------------------------------------------
 // Combinational, module connection
 //----------------------------------------------------------------------
+//------------------------------------------------------------------
+// clk_src domain
+//------------------------------------------------------------------
 wire ctrl_src; // ctrl signal will be synchronized to destination clock
 
 wire ctrl_clr; // clear ctrl_lvl after synchronized to destination clock
@@ -111,17 +114,26 @@ wire ctrl_flag;
 //------------------------------------------------------------------
 // Output
 //------------------------------------------------------------------
+//--------------------------------------------------------------
+// clk_dest domain
+//--------------------------------------------------------------
 reg ctrl_sync_o;
 
 //------------------------------------------------------------------
 // Internal signal
 //------------------------------------------------------------------
+//--------------------------------------------------------------
+// clk_src domain
+//--------------------------------------------------------------
 reg ctrl_lvl; // multi clock cycle ctrl
 
 // clear signal for level control
 reg clr_ctrl_q;
 reg clr_ctrl_q1;
 
+//--------------------------------------------------------------
+// clk_dest domain
+//--------------------------------------------------------------
 reg ctrl_sync_q;
 
 //------------------------------------------------------------------
@@ -148,10 +160,18 @@ reg ctrl_sync_q;
 //----------------------------------------------------------------------
 // Internal signal
 //----------------------------------------------------------------------
-assign ctrl_src = (FAST2SLOW)? ctrl_lvl: ctrl_i;
+//------------------------------------------------------------------
+// clk_src domain
+//------------------------------------------------------------------
+if (FAST2SLOW)
+    assign ctrl_src = ctrl_lvl;
+else
+    assign ctrl_src = ctrl_i;
 
-assign ctrl_clr = clr_ctrl_q1? 1'b0: ctrl_lvl;
-assign ctrl_flag = ctrl_i? 1'b1: ctrl_clr;
+if (FAST2SLOW) begin
+    assign ctrl_clr = clr_ctrl_q1? 1'b0: ctrl_lvl;
+    assign ctrl_flag = ctrl_i? 1'b1: ctrl_clr;
+end
 
 //----------------------------------------------------------------------
 // FSM
@@ -164,6 +184,9 @@ assign ctrl_flag = ctrl_i? 1'b1: ctrl_clr;
 //----------------------------------------------------------------------
 // Output
 //----------------------------------------------------------------------
+//------------------------------------------------------------------
+// clk_dest domain
+//------------------------------------------------------------------
 always @ (negedge rst_dest_n or posedge clk_dest) begin
     if (!rst_dest_n)
         ctrl_sync_o <= #TD 1'b0;
@@ -174,27 +197,35 @@ end
 //----------------------------------------------------------------------
 // Internal signal
 //----------------------------------------------------------------------
-always @ (negedge rst_src_n or posedge clk_src) begin
-    if (!rst_src_n)
-        ctrl_lvl <= #TD 1'b0;
-    else
-        ctrl_lvl <= #TD ctrl_flag;
+//------------------------------------------------------------------
+// clk_src domain
+//------------------------------------------------------------------
+if (FAST2SLOW) begin
+    always @ (negedge rst_src_n or posedge clk_src) begin
+        if (!rst_src_n)
+            ctrl_lvl <= #TD 1'b0;
+        else
+            ctrl_lvl <= #TD ctrl_flag;
+    end
+    
+    always @ (negedge rst_src_n or posedge clk_src) begin
+        if (!rst_src_n)
+            clr_ctrl_q <= #TD 1'b0;
+        else
+            clr_ctrl_q <= #TD ctrl_sync_o;
+    end
+    
+    always @ (negedge rst_src_n or posedge clk_src) begin
+        if (!rst_src_n)
+            clr_ctrl_q1 <= #TD 1'b0;
+        else
+            clr_ctrl_q1 <= #TD clr_ctrl_q;
+    end
 end
 
-always @ (negedge rst_src_n or posedge clk_src) begin
-    if (!rst_src_n)
-        clr_ctrl_q <= #TD 1'b0;
-    else
-        clr_ctrl_q <= #TD ctrl_sync_o;
-end
-
-always @ (negedge rst_src_n or posedge clk_src) begin
-    if (!rst_src_n)
-        clr_ctrl_q1 <= #TD 1'b0;
-    else
-        clr_ctrl_q1 <= #TD clr_ctrl_q;
-end
-
+//------------------------------------------------------------------
+// clk_dest domain
+//------------------------------------------------------------------
 always @ (negedge rst_dest_n or posedge clk_dest) begin
     if (!rst_dest_n)
         ctrl_sync_q <= #TD 1'b0;
